@@ -1,0 +1,44 @@
+name: avto-agent
+
+on:
+  schedule:
+    # Vsakih 15 minut. GitHub cron ni natancen -- realno vsakih 15-40 min.
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}   # gumb za rocni zagon
+
+permissions:
+  contents: write
+
+concurrency:
+  group: avto-agent
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Zazeni agenta
+        env:
+          SMTP_USER:       ${{ secrets.SMTP_USER }}
+          SMTP_PASS:       ${{ secrets.SMTP_PASS }}
+          MAIL_TO_ALERT:   ${{ secrets.MAIL_TO_ALERT }}
+          MAIL_TO_DIGEST:  ${{ secrets.MAIL_TO_DIGEST }}
+        run: python avto_agent.py
+
+      - name: Shrani stanje
+        run: |
+          git config user.name  "avto-agent"
+          git config user.email "actions@github.com"
+          git add data/seen.json
+          git diff --staged --quiet || git commit -m "stanje $(date -u +%FT%TZ) [skip ci]"
+          git push
